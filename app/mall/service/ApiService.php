@@ -13,6 +13,7 @@ namespace app\mall\service;
 use app\mall\model\MallBrandModel;
 use app\mall\model\MallCategoryModel;
 use app\mall\model\MallItemModel;
+use app\mall\model\MallItemSkuModel;
 use think\Db;
 use think\db\Query;
 
@@ -46,13 +47,14 @@ class ApiService
      */
     public static function items($param)
     {
-        $where      = [
+        $where       = [
             'status' => 1,
         ];
-        $paramWhere = empty($param['where']) ? '' : $param['where'];
-        $limit      = empty($param['limit']) ? 10 : $param['limit'];
-        $order      = empty($param['order']) ? 'id ASC' : $param['order'];
-        $page       = isset($param['page']) ? $param['page'] : false;
+        $paramWhere  = empty($param['where']) ? '' : $param['where'];
+        $limit       = empty($param['limit']) ? 10 : $param['limit'];
+        $order       = empty($param['order']) ? 'id ASC' : $param['order'];
+        $page        = isset($param['page']) ? $param['page'] : false;
+        $categoryIds = empty($param['category_ids']) ? '' : $param['category_ids'];
 
         $return        = [];
         $MallItemModel = new MallItemModel();
@@ -60,6 +62,11 @@ class ApiService
         $items = $MallItemModel
             ->where($where)
             ->where($paramWhere)
+            ->where(function (Query $query) use ($categoryIds) {
+                if (!empty($categoryIds)) {
+                    $query->where('category_id', 'in', $categoryIds);
+                }
+            })
             ->order($order);
 
         if (empty($page)) {
@@ -82,6 +89,40 @@ class ApiService
 
         }
         return $return;
+    }
+
+    /**
+     * 获取商品信息（带SKU信息）
+     * @author ccbox <ccbox.net@163.com>
+     * 
+     *
+     * @param integer $itemId
+     * @param integer $skuId
+     * @return array
+     */
+    public static function itemInfo($itemId)
+    {
+        if($itemId < 1){
+            return false;
+        }
+        
+        $mallItemModel    = new MallItemModel();
+        $item = $mallItemModel->where('id', $itemId)->field('content',true)->find();
+        if (empty($item)) {
+            return false;
+        }
+        
+        $item['skus'] = [];
+        $mallItemSkuModel = new MallItemSkuModel();
+        $skuWhere = ['item_id'=> $itemId];
+        $itemSkus = $mallItemSkuModel->where($skuWhere)->select()->toArray();
+        if($itemSkus){
+            foreach($itemSkus as $sku){
+                $skus[$sku['id']] = $sku; // 这里要定义一个中间变量
+            }
+            $item['skus'] = $skus;
+        }
+        return $item;
     }
 
     /**
@@ -170,7 +211,6 @@ class ApiService
                 $result[$item['parent_id']]['children'][] = $item;
             }
         }
-//        print_r($result);exit;
         return $result;
     }
 }
